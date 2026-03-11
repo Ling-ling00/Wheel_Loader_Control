@@ -1,0 +1,46 @@
+/**:
+  ros__parameters:
+    # --- Mechanical Linkage Geometry ---
+    # Coordinates of pivots relative to arm pivot (0,0)
+    l1_coords: [-0.04227, -0.61550]
+    l4_coords: [0.18834, -0.18169]
+    
+    # Link Lengths (m)
+    l2: 1.95280
+    l3: 3.26512
+    l5: 1.92685
+    l6: 0.63662
+    l7: 0.95375
+    l8: 0.92750
+    l10: 0.38104
+    L_bkt: 1.89815
+    H_bkt: 0.77523
+    r: 1.0
+
+    # Angle Offsets (degrees)
+    alpha3_deg: 16.1
+    alpha4_deg: 149.55
+    alpha7_deg: 93.61
+
+    # Cylinder Stroke Limits [min, max] (m)
+    limit_lift: [1.66015, 2.65533]
+    limit_tilt: [1.26973, 1.84646]
+
+    # --- System & Global Settings ---
+    dt: 0.02
+    y_offset: 1.79320933456
+
+    # --- Trajectory Generator Settings ---
+    vmax: [0.3, 0.3, 0.7] # [x, y, theta]
+    amax: [0.1, 0.1, 0.3] # [x, y, theta]
+    replan_period: 0.5
+    arrival_tolerance: 0.1
+
+    # --- State / Dig Cycle Settings ---
+    bucket_width: 0.5
+    target_volume: 2.0
+    safety_factor: 1.5
+    insert_length: 1.0
+    max_insert_length: 3.0
+    max_height: 4.0
+    max_tilt_deg: 54.0
