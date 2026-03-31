@@ -16,6 +16,7 @@ install(PROGRAMS
   scripts/state_generator.py
   scripts/trajectory_generator.py
   scripts/kinematics_node.py
+  scripts/loader_feedback_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -26,6 +27,7 @@ install(DIRECTORY
   launch
   meshes
   config
+  world
   DESTINATION share/${PROJECT_NAME})
 
 ament_package()

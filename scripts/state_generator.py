@@ -25,7 +25,6 @@ class StateGeneratorNode(Node):
                 ('max_height', 4.0),        # Carry position height (m)
                 ('max_tilt_deg', 54.0),     # Max bucket tilt angle (degrees)
                 ('max_insert_length', 3.0), # Max insert length (m)
-                ('y_offset', 1.7932093345)  # Kinematic offset for bucket position
             ]
         )
 
@@ -37,41 +36,65 @@ class StateGeneratorNode(Node):
         self.max_h = self.get_parameter('max_height').value
         self.max_tilt = np.deg2rad(self.get_parameter('max_tilt_deg').value)
         self.max_l = self.get_parameter('max_insert_length').value
-        self.y_offset = self.get_parameter('y_offset').value
 
         # --- ROS COMMUNICATION ---
-        self.create_subscription(Pose, "/start_pose", self.pose_callback, 10)
-        self.create_subscription(PointCloud2, "/pointcloud", self.pointcloud_callback, 10)
+        self.create_subscription(Pose, "/loader_pose", self.pose_callback, 10)
+        self.create_subscription(PointCloud2, "/pile_cloud", self.pointcloud_callback, 10)
         self.create_subscription(Float64MultiArray, '/loader_current_end_position', self.bucket_pose_callback, 10)
         self.pos_pub = self.create_publisher(Float64MultiArray, "/loader_target_position", 10)
+        self.local_loader_pos_pub = self.create_publisher(Pose, "/local_loader_pose", 10)
         self.create_service(Trigger, "/start_state", self.start_trigger_callback)
         
         # --- STATE VARIABLES ---
         self.car_pose = np.zeros(3)                 # [world_x, world_y, yaw]
         self.bucket_pose = np.zeros(3)              # [x, z, theta] local
-        self.target_pile_local = np.array([8,0,0])  # [x, y, z] of pile relative to car
-        self.slope = np.deg2rad(35.0)               # theta of pile
+        self.target_pile_local = None 
+        self.slope = None               # theta of pile
+        self.local_yaw = 0.0
+        self.start_x = 0.0
+        self.start_y = 0.0
 
     # --- ROS CALLBACKS ---
     def pose_callback(self, msg: Pose) -> None:
         """Updates the vehicle's current position and heading in the World Frame."""
-        self.car_pose[0] = msg.position.x
-        self.car_pose[1] = msg.position.y
+        current_world_x = msg.position.x
+        current_world_y = msg.position.y
+        
         quat = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
-        _, _, yaw = tf_transformations.euler_from_quaternion(quat)
-        self.car_pose[2] = yaw
+        _, _, current_yaw = tf_transformations.euler_from_quaternion(quat)
+
+        self.car_pose = [current_world_x, current_world_y, current_yaw]
+
+        if self.local_yaw is not None:
+            # publish location in local frame
+            dx = current_world_x - self.start_x 
+            dy = current_world_y - self.start_y
+            
+            local_x = dx * np.cos(self.local_yaw) + dy * np.sin(self.local_yaw)
+            local_y = -dx * np.sin(self.local_yaw) + dy * np.cos(self.local_yaw)
+            local_yaw_diff = current_yaw - self.local_yaw
+
+            pub_msg = Pose()
+            pub_msg.position.x = local_x
+            pub_msg.position.y = local_y
+            
+            q = tf_transformations.quaternion_from_euler(0, 0, local_yaw_diff)
+            pub_msg.orientation.x, pub_msg.orientation.y, pub_msg.orientation.z, pub_msg.orientation.w = q
+
+            self.local_loader_pos_pub.publish(pub_msg)
 
     def bucket_pose_callback(self, msg: Float64MultiArray) -> None:
         """Updates the current local coordinates of the bucket tip."""
         if len(msg.data) >= 3:
-            self.bucket_pose = [msg.data[0], msg.data[1] + self.y_offset, msg.data[2]]
+            self.bucket_pose = [msg.data[0], msg.data[1], msg.data[2]]
 
     def pointcloud_callback(self, msg: PointCloud2) -> None:
         """
         Processes LiDAR data to detect the nearest material pile.
         Filters points to find the pile base and estimates the slope angle.
         """
-        points_gen = point_cloud2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)
+        # points from volume estimate have slope angle data
+        points_gen = point_cloud2.read_points(msg, field_names=("x", "y", "z", "slope_angle"), skip_nans=True)
         points = np.array(list(points_gen))
         
         if points.size == 0:
@@ -79,12 +102,18 @@ class StateGeneratorNode(Node):
 
         # Coordinate Transformation: World -> Local Car Frame
         rx, ry, ryaw = self.car_pose[0], self.car_pose[1], self.car_pose[2]
-        translated = points[:, :2] - [rx, ry]
+
+        raw_x = points['x']
+        raw_y = points['y']
+        raw_z = points['z']
+        point_angle_deg = points['slope_angle']
+
+        translated_x = raw_x - rx
+        translated_y = raw_y - ry
         cos_y, sin_y = np.cos(-ryaw), np.sin(-ryaw)
         
-        local_x = translated[:, 0] * cos_y - translated[:, 1] * sin_y
-        local_y = translated[:, 0] * sin_y + translated[:, 1] * cos_y
-        local_z = points[:, 2]
+        local_x = translated_x * cos_y - translated_y * sin_y
+        local_y = translated_x * sin_y + translated_y * cos_y
 
         # Filter: Keep points in front of car and within the width of the bucket
         mask = (local_x > 0) & (np.abs(local_y) < self.width/2.0)
@@ -92,16 +121,20 @@ class StateGeneratorNode(Node):
             return
         
         relevant_x = local_x[mask]
-        relevant_z = local_z[mask]
+        relevant_angle = point_angle_deg[mask]
 
         # Identify pile start (nearest X) and calculate average slope
         closest_idx = np.argmin(relevant_x)
-        self.target_pile_local = np.array([relevant_x[closest_idx], 0.0, relevant_z[closest_idx]])
+        dx = self.car_pose[0] - self.start_x 
+        dy = self.car_pose[1] - self.start_y
+        
+        x_wheel = dx * np.cos(self.local_yaw) + dy * np.sin(self.local_yaw)
+        self.target_pile_local = relevant_x[closest_idx]
 
         # Slope estimation: atan2(Height Change / Distance Change)
-        self.slope = np.arctan2(np.max(relevant_z) - np.min(relevant_z), np.max(relevant_x) - np.min(relevant_x))
+        self.slope = np.deg2rad(np.average(relevant_angle))
         
-        self.get_logger().info(f"Pile detected at local X: {self.target_pile_local[0]:.2f}m, Slope: {np.rad2deg(self.slope):.1f} deg")
+        self.get_logger().info(f"Pile detected at local X: {self.target_pile_local:.2f}m, Slope: {np.rad2deg(self.slope):.1f} deg")
             
     # --- ACTION LOGIC ---
     def start_trigger_callback(self, req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
@@ -111,6 +144,10 @@ class StateGeneratorNode(Node):
             msg = Float64MultiArray()
             msg.data = list(np.array(waypoints).flatten())
             self.pos_pub.publish(msg)
+            
+            self.local_yaw = self.car_pose[2]
+            self.start_x = self.car_pose[0]
+            self.start_y = self.car_pose[1]
 
             res.success = True
             res.message = "Waypoints generated based on Pile Location"
@@ -132,7 +169,7 @@ class StateGeneratorNode(Node):
             return
         
         # Dist to pile start (Local X)
-        dist_to_pile = self.target_pile_local[0] 
+        dist_to_pile = self.target_pile_local
         
         # Define bucket states: [Local_X, Local_Z, Pitch]
         # Point A: Approach pile base

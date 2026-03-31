@@ -14,7 +14,8 @@ def generate_launch_description():
 
     # File paths
     xacro_file = os.path.join(pkg_path, 'urdf', 'L580_end_link.xacro')
-    rviz_file = os.path.join(pkg_path, 'rviz', 'display.rviz')
+    rviz_file = os.path.join(pkg_path, 'rviz', 'rviz.rviz')
+    world_file = os.path.join(pkg_path, 'world', 'pile_world.world')
 
     # Process xacro -> robot_description
     robot_description_config = xacro.process_file(xacro_file)
@@ -24,6 +25,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory('gazebo_ros'), 'launch', 'gazebo.launch.py')
         ),
+        launch_arguments={'world': world_file}.items()
     )
 
     # Spawn robot into simulation

@@ -16,4 +16,5 @@ def generate_launch_description():
         Node(package=package_name, executable='trajectory_generator.py', parameters=[config]),
         Node(package=package_name, executable='state_generator.py', parameters=[config]),
         Node(package=package_name, executable='linkage_node.py', parameters=[config]),
+        Node(package=package_name, executable='loader_feedback_node.py', parameters=[config]),
     ])

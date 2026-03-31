@@ -29,6 +29,7 @@
     # --- System & Global Settings ---
     dt: 0.02
     y_offset: 1.79320933456
+    x_offset: 0.0
 
     # --- Trajectory Generator Settings ---
     vmax: [0.3, 0.3, 0.7] # [x, y, theta]
@@ -41,6 +42,6 @@
     target_volume: 2.0
     safety_factor: 1.5
     insert_length: 1.0
-    max_insert_length: 3.0
+    max_insert_length: 2.5
     max_height: 4.0
     max_tilt_deg: 54.0

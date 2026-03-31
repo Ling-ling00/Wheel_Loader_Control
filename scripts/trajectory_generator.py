@@ -18,8 +18,7 @@ class TrajectoryGeneratorNode(Node):
                 ('amax', [0.1, 0.1, 0.3]),          # Max acceleration [x, y, theta]
                 ('dt', 0.02),                       # Control loop period
                 ('replan_period', 0.5),             # Trajectory refresh rate
-                ('arrival_tolerance', 0.1),         # Distance to consider waypoint reached
-                ('y_offset', 1.79320933456)         # Kinematic offset for feedback (offset position from 0,0 at arm link to floor (set floor as 0))
+                ('arrival_tolerance', 0.1)          # Distance to consider waypoint reached
             ]
         )
 
@@ -29,7 +28,6 @@ class TrajectoryGeneratorNode(Node):
         self.dt = self.get_parameter('dt').value
         self.replan_period = self.get_parameter('replan_period').value
         self.arrival_tolerance = self.get_parameter('arrival_tolerance').value
-        self.y_offset = self.get_parameter('y_offset').value
 
         # --- STATE VARIABLES ---
         self.current_pos = np.zeros(3)
@@ -53,7 +51,7 @@ class TrajectoryGeneratorNode(Node):
         if len(msg.data) >= 3:
             self.current_pos = np.array([
                 msg.data[0], 
-                msg.data[1] + self.y_offset, 
+                msg.data[1],
                 msg.data[2]
             ])
 

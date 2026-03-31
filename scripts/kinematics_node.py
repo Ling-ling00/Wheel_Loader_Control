@@ -3,6 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64MultiArray
+from geometry_msgs.msg import Pose
 import numpy as np
 
 class KinematicsNode(Node):
@@ -28,6 +29,8 @@ class KinematicsNode(Node):
                 ('l10', 0.38104),
                 ('L_bkt', 1.89815),
                 ('H_bkt', 0.77523),
+                ('y_offset', 1.7932093345),
+                ('x_offset', 0.0),
                 ('dt', 0.02)
             ]
         )
@@ -59,12 +62,16 @@ class KinematicsNode(Node):
         self.H_bkt = self.get_parameter('H_bkt').value
         self.dt = self.get_parameter('dt').value
 
+        self.x_offset = self.get_parameter('x_offset').value
+        self.y_offset = self.get_parameter('y_offset').value
+
         # Calculated dependent parameters
         self.l9, self.alpha5, self.alpha6 = self.triangle_angle_slove(self.l3, self.l5, self.alpha3)
 
         # --- ROS COMMUNICATION ---
         self.create_subscription(Float64MultiArray, '/loader_target_velocity', self.speed_callback, 10)
         self.create_subscription(Float64MultiArray, '/loader_current_position', self.feedback_callback, 10)
+        self.create_subscription(Pose, "/local_loader_pose", self.local_pose_callback, 10)
         self.pub = self.create_publisher(Float64MultiArray, '/loader_joint_velocity', 10)
         self.end_pub = self.create_publisher(Float64MultiArray, '/loader_current_end_position', 10)
         
@@ -85,6 +92,10 @@ class KinematicsNode(Node):
         if len(msg.data) >= 2:
             self.pl, self.pt = msg.data[0], msg.data[1]
 
+    def local_pose_callback(self, msg: Pose) -> None:
+        """Updates the current X position from the State Generator's global-to-local math."""
+        self.x_wheel = msg.position.x
+
     def timer_callback(self) -> None:
         """Main control loop: performs IK to find joint speeds and FK for position feedback."""
         if self.pl != 0 and self.pt != 0:
@@ -100,13 +111,36 @@ class KinematicsNode(Node):
             self.pub.publish(msg)
 
             # Forward Kinematics for Odometry/Feedback
-            self.x_wheel += v_wheel * self.dt
             xt, yt, theta = self.tip_fwd(self.x_wheel, self.pl, self.pt)
 
             tip_msg = Float64MultiArray()
             tip_msg.data = [float(xt), float(yt), float(theta)]
             self.end_pub.publish(tip_msg)
     
+    # --- ROTATION TO LINEAR ---
+    def feedback_transform(self, beta: float, beta3: float) -> tuple[float, float]:
+        """
+        Transforms angular joint feedback into linear actuator displacements.
+
+        Args:
+            beta (float):  Primary joint angle in radians.
+            beta3 (float): Secondary joint angle in radians.
+
+        Returns:
+            tuple[float, float]: (pl, pt)
+                pl: Linear displacement of the primary actuator.
+                pt: Linear displacement of the secondary actuator.
+        """
+        pl = np.sqrt(self.l1**2 + self.l2**2 - (2 * self.l1 * self.l2 * np.cos(beta - self.alpha1)))
+        
+        beta2 = -self.alpha2 + beta + self.alpha3
+        root_temp = np.sqrt(self.l4**2 + self.l5**2 - (2 * self.l4 * self.l5 * np.cos(beta2)))
+        second_part = (2 * (self.l5**2) - (2 * self.l4 * self.l5 * np.cos(beta2))) / (2 * self.l5 * root_temp)
+        pt_sq = root_temp**2 + self.l6**2 - (2 * root_temp * self.l6 * np.cos(beta3 + np.arccos(second_part)))
+        
+        pt = np.sqrt(pt_sq)
+        return pl, pt
+
     # --- FORWARD KINEMATICS ---
     def tip_fwd(self, x_wheel: float, pl: float, pt: float) -> tuple[float, float, float]:
         """Calculates global [x, y, theta] of the bucket tip."""
@@ -122,8 +156,8 @@ class KinematicsNode(Node):
     def xy_fwd(self, x_wheel: float, pl: float) -> tuple[float, float]:
         """Calculates Cartesian position of the arm pivot joint."""
         temp = np.arccos((self.l1**2 + self.l2**2 - pl**2)/(2*self.l1*self.l2)) + self.alpha1
-        x = x_wheel + self.l3 * np.cos(temp)
-        y = self.l3 * np.sin(temp)
+        x = x_wheel + self.l3 * np.cos(temp) + self.x_offset
+        y = self.l3 * np.sin(temp) + self.y_offset
         return x, y
         
     def theta_fwd(self, pl: float, pt: float) -> tuple[float, float, float, float]:

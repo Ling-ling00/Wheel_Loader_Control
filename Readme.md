@@ -53,7 +53,7 @@ source install/setup.bash
 ---
 
 ## Node Description
-This system has 4 main nodes that work together.
+This system has 5 main nodes that work together.
 
 ### kinematics_node
 The mathematical engine. It performs Forward Kinematics (FK) to track the bucket position and Inverse Kinematics (IK) to convert target tip velocities into cylinder speeds.
@@ -63,6 +63,7 @@ The mathematical engine. It performs Forward Kinematics (FK) to track the bucket
 | :--- | :--- | :--- |
 | /loader_target_velocity | Float64MultiArray | Desired [vx, vy, v_theta] for the bucket tip. |
 | /loader_current_position | Float64MultiArray | Feedback of actual cylinder lengths [lift, tilt]. |
+| /local_loader_pose | Pose | Feedback of Loader Pose in Local Frame. (Reference from start Trajectory) |
 
 **Output**
 | Topic Name | Type | Description |
@@ -93,14 +94,15 @@ The state of the dig cycle. It processes LiDAR data to detect piles and calculat
 **Input**
 | Topic Name | Type | Description |
 | :--- | :--- | :--- |
-| /pointcloud | PointCloud2 | LiDAR data used to detect the pile distance and slope. |
-| /start_pose | Pose | The vehicle's current position in the global map. |
+| /pile_cloud | PointCloud2 | LiDAR data used to detect the pile distance and slope. Including "x, y, z, slope_angle" data. |
+| /loader_pose | Pose | The vehicle's current position in the global map. |
 | /loader_current_end_position| Float64MultiArray | Current bucket position used as the starting point for plans. |
 
 **Output**
 | Topic Name | Type | Description |
 | :--- | :--- | :--- |
 | /loader_target_position | Float64MultiArray | The sequence of waypoints sent to the Trajectory Generator. |
+| /local_loader_pose | Pose | Feedback of Loader Pose in Local Frame. (Reference from start Trajectory) |
 
 ### linkage_node
 This node is a simulation for the loader. It's performs numerical integration and provides a high-fidelity visual dashboard of the entire physical assembly.
@@ -117,6 +119,19 @@ This node is a simulation for the loader. It's performs numerical integration an
 | /forward_position_controller/commands | Float64MultiArray | Angular commands sent to Gazebo to move the virtual arm and bucket. |
 | /velocity_controllers/commands | Float64MultiArray | Direct velocity commands for the Gazebo wheel drivers. |
 | /loader_current_position | Float64MultiArray | The simulated "actual" cylinder lengths based on the physics integration. |
+
+### loader_feedback_node
+This node transform feedback topic from gazebo message ModelStates to geometry message Pose.
+
+**Input**
+| Topic Name | Type | Description |
+| :--- | :--- | :--- |
+| /gazebo/model_states | ModelStates | Gazebo Message Model Pose Feedback. |
+
+**Output**
+| Topic Name | Type | Description |
+| :--- | :--- | :--- |
+| /loader_pose | Pose | The vehicle's current position feedback in the global map. |
 
 ---
 
@@ -148,6 +163,7 @@ Hard constraints to prevent mechanical damage and ensure smooth trajectory gener
 |vmax	|List	|[0.3, 0.3, 0.7]	|Max allowable velocity for [X, Y, Theta].|
 |amax	|List	|[0.1, 0.1, 0.3]	|Max allowable acceleration for [X, Y, Theta].|
 |y_offset	|Float	|1.7932	|Distance from the arm pivot (0,0 in kinematic frame) to the floor level.|
+|x_offset	|Float	|0.0	|Distance from the arm pivot (0,0 in kinematic frame) to center of wheel loader or base frame of wheel loader.|
 |replan_period	|Float	|0.5	|How often the trajectory generator refreshes the path.|
 |arrival_tolerance	|Float	|0.1	|Distance error (m) allowed before considering a waypoint reached.|
 |dt	|Float	|0.02	|Global control loop period (default 50Hz).|
@@ -179,6 +195,8 @@ Load all nodes and parameters using the launch file:
 ```bash
 ros2 launch loader_sim_pkg loader_trajectory.launch.py
 ```
+
+**To simulate this node need input from volume estimate node which publish pile_cloud with `slope_angle` data**
 
 2. Trigger Autonomous Digging
 
