@@ -76,7 +76,7 @@
           <cast_shadows>0</cast_shadows>
           <geometry>
             <mesh>
-              <uri>/home/ponwalai/fibo-technovation/loader_sim_pkg/src/meshes/pile_test_20deg.STL</uri>
+              <uri>/home/ponwalai/fibo-technovation/loader_sim_pkg/src/meshes/pile_test_45deg.STL</uri>
             </mesh>
           </geometry>
           <material>
@@ -89,7 +89,7 @@
         <collision name='pile_collision'>
           <geometry>
             <mesh>
-              <uri>file:///home/ponwalai/fibo-technovation/loader_sim_pkg/src/meshes/pile_test_20deg.STL</uri>
+              <uri>file:///home/ponwalai/fibo-technovation/loader_sim_pkg/src/meshes/pile_test_45deg.STL</uri>
             </mesh>
           </geometry>
           <surface>

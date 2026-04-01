@@ -112,8 +112,11 @@ class TrajectoryGeneratorNode(Node):
         dp = pf - p0
 
         # Estimate required time (T) based on vel/acc constraints
-        T_vel = np.max(np.abs(dp) / self.vmax)
-        T_acc = np.max(np.sqrt(np.abs(dp) / self.amax) * 2)
+        T_vel = np.max((np.abs(dp) / self.vmax) * 1.5)
+        a = self.amax
+        b = (4*v0 + 2*vf)
+        c = -6 * np.abs(dp)
+        T_acc = np.max((-b + np.sqrt(b**2 - 4*a*c)) / (2*a))
         T = max(T_vel, T_acc)
 
         if T <= 0:
