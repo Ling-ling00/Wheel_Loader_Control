@@ -14,46 +14,32 @@ class KinematicsNode(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('l1_coords', [-0.04227, -0.61550]),
-                ('l2', 1.95280),
-                ('l3', 3.26512),
+                ('l3', 3.93582620),
                 ('r', 1.0),
-                ('alpha3_deg', 16.1),
-                ('alpha4_deg', 149.55),
-                ('alpha7_deg', 93.61),
-                ('l4_coords', [0.18834, -0.18169]),
-                ('l5', 1.92685),
-                ('l6', 0.63662),
-                ('l7', 0.95375),
-                ('l8', 0.92750),
-                ('l10', 0.38104),
-                ('L_bkt', 1.89815),
-                ('H_bkt', 0.77523),
-                ('y_offset', 1.7932093345),
-                ('x_offset', 0.0),
+                ('l5', 2.52445618),
+                ('l7', 1.14011468),
+                ('l8', 0.97728480),
+                ('l10', 0.45989269),
+                ('L_bkt', 1.29249),
+                ('H_bkt', 0.69464),
+                ('alpha1_deg', 29.701018799463878),
+                ('alpha2_deg', 50.58594847780444),
+                ('alpha3_deg', 16.79066),
+                ('alpha7_deg', 103.04),
                 ('dt', 0.02)
             ]
         )
 
         # --- GET PARAMETERS ---
-        l1_c = self.get_parameter('l1_coords').value
-        self.l1 = np.linalg.norm(l1_c)
-        self.alpha1 = np.arctan2(l1_c[1], l1_c[0])
-        
-        self.l2 = self.get_parameter('l2').value
         self.l3 = self.get_parameter('l3').value
         self.r = self.get_parameter('r').value
         
-        l4_c = self.get_parameter('l4_coords').value
-        self.l4 = np.linalg.norm(l4_c)
-        self.alpha2 = np.arctan2(l4_c[1], l4_c[0])
-        
+        self.alpha1 = np.deg2rad(self.get_parameter('alpha1_deg').value)
+        self.alpha2 = np.deg2rad(self.get_parameter('alpha2_deg').value)
         self.alpha3 = np.deg2rad(self.get_parameter('alpha3_deg').value)
-        self.alpha4 = np.deg2rad(self.get_parameter('alpha4_deg').value)
         self.alpha7 = np.deg2rad(self.get_parameter('alpha7_deg').value)
         
         self.l5 = self.get_parameter('l5').value
-        self.l6 = self.get_parameter('l6').value
         self.l7 = self.get_parameter('l7').value
         self.l8 = self.get_parameter('l8').value
         self.l10 = self.get_parameter('l10').value
@@ -61,9 +47,6 @@ class KinematicsNode(Node):
         self.L_bkt = self.get_parameter('L_bkt').value
         self.H_bkt = self.get_parameter('H_bkt').value
         self.dt = self.get_parameter('dt').value
-
-        self.x_offset = self.get_parameter('x_offset').value
-        self.y_offset = self.get_parameter('y_offset').value
 
         # Calculated dependent parameters
         self.l9, self.alpha5, self.alpha6 = self.triangle_angle_slove(self.l3, self.l5, self.alpha3)
@@ -79,7 +62,7 @@ class KinematicsNode(Node):
 
         # --- STATE VARIABLES ---
         self.v_x, self.v_y, self.v_theta_world = 0.0, 0.0, 0.0
-        self.x_wheel, self.pl, self.pt = 0.0, 0.0, 0.0
+        self.x_wheel, self.beta1, self.beta2 = 0.0, None, None
 
     # --- ROS CALLBACKS ---
     def speed_callback(self, msg: Float64MultiArray) -> None:
@@ -90,7 +73,7 @@ class KinematicsNode(Node):
     def feedback_callback(self, msg: Float64MultiArray) -> None:
         """Updates current cylinder lengths [pl (lift), pt (tilt)]."""
         if len(msg.data) >= 2:
-            self.pl, self.pt = msg.data[0], msg.data[1]
+            self.beta1, self.beta2 = msg.data[0], msg.data[1]
 
     def local_pose_callback(self, msg: Pose) -> None:
         """Updates the current X position from the State Generator's global-to-local math."""
@@ -98,135 +81,83 @@ class KinematicsNode(Node):
 
     def timer_callback(self) -> None:
         """Main control loop: performs IK to find joint speeds and FK for position feedback."""
-        if self.pl != 0 and self.pt != 0:
+        if self.beta1 != None and self.beta2 != None:
+            # Forward Kinematics for Odometry/Feedback
+            xt, yt, theta_world = self.tip_fwd(self.x_wheel, self.beta1, self.beta2)
+            xa, ya = self.xy_fwd(self.x_wheel, self.beta1)
+
+            tip_msg = Float64MultiArray()
+            tip_msg.data = [float(xt), float(yt), float(theta_world)]
+            self.end_pub.publish(tip_msg)
+
+            self.get_logger().info(f"position C: ({xa*1000:.2f}, {ya*1000:.2f})")
+            self.get_logger().info(f"position D: ({xt*1000:.2f}, {yt*1000:.2f})")
+
             # Inverse Kinematics for Velocities
-            beta_dot, theta_dot, beta, theta = self.beta_theta_dot_inv(self.v_y, self.v_theta_world, self.pl, self.pt)
-            pl_dot = self.beta_dot_inv(beta_dot, self.pl)
-            v_wheel = self.x_dot_inv(self.v_x, beta_dot, self.v_theta_world, beta, theta)
-            pt_dot = self.theta_dot_inv(theta_dot, pl_dot, self.pl, self.pt)
+            beta1_dot = self.beta_dot_inv(self.v_y, self.v_theta_world, self.beta1, theta_world)
+            v_wheel = self.x_dot_inv(self.v_x, beta1_dot, self.v_theta_world, self.beta1, theta_world)
+            beta2_dot = self.theta_dot_inv(self.v_theta_world, beta1_dot, self.beta2)
 
             # Publish joint velocities
             msg = Float64MultiArray()
-            msg.data = [pl_dot, pt_dot, v_wheel]
+            msg.data = [beta1_dot, beta2_dot, v_wheel]
             self.pub.publish(msg)
 
-            # Forward Kinematics for Odometry/Feedback
-            xt, yt, theta = self.tip_fwd(self.x_wheel, self.pl, self.pt)
-
-            tip_msg = Float64MultiArray()
-            tip_msg.data = [float(xt), float(yt), float(theta)]
-            self.end_pub.publish(tip_msg)
-    
-    # --- ROTATION TO LINEAR ---
-    def feedback_transform(self, beta: float, beta3: float) -> tuple[float, float]:
-        """
-        Transforms angular joint feedback into linear actuator displacements.
-
-        Args:
-            beta (float):  Primary joint angle in radians.
-            beta3 (float): Secondary joint angle in radians.
-
-        Returns:
-            tuple[float, float]: (pl, pt)
-                pl: Linear displacement of the primary actuator.
-                pt: Linear displacement of the secondary actuator.
-        """
-        pl = np.sqrt(self.l1**2 + self.l2**2 - (2 * self.l1 * self.l2 * np.cos(beta - self.alpha1)))
-        
-        beta2 = -self.alpha2 + beta + self.alpha3
-        root_temp = np.sqrt(self.l4**2 + self.l5**2 - (2 * self.l4 * self.l5 * np.cos(beta2)))
-        second_part = (2 * (self.l5**2) - (2 * self.l4 * self.l5 * np.cos(beta2))) / (2 * self.l5 * root_temp)
-        pt_sq = root_temp**2 + self.l6**2 - (2 * root_temp * self.l6 * np.cos(beta3 + np.arccos(second_part)))
-        
-        pt = np.sqrt(pt_sq)
-        return pl, pt
-
     # --- FORWARD KINEMATICS ---
-    def tip_fwd(self, x_wheel: float, pl: float, pt: float) -> tuple[float, float, float]:
+    def tip_fwd(self, x_wheel: float, beta1: float, beta2: float) -> tuple[float, float, float]:
         """Calculates global [x, y, theta] of the bucket tip."""
-        beta, _, _, theta = self.theta_fwd(pl, pt)
-        theta_world = theta + beta
-        xa, ya = self.xy_fwd(x_wheel, pl)
+        theta = self.theta_fwd(beta2)
+        theta_world = theta - (self.alpha1 + beta1)
+        xa, ya = self.xy_fwd(x_wheel, beta1)
 
-        dx = -(self.l10 - self.H_bkt) * np.cos(theta_world + self.alpha7) + self.L_bkt * np.cos(theta_world)
-        dy = -(self.l10 - self.H_bkt) * np.sin(theta_world + self.alpha7) + self.L_bkt * np.sin(theta_world)
+        dx = (self.H_bkt - self.l10) * np.cos(np.pi - (theta_world + self.alpha7)) + self.L_bkt * np.cos(theta_world)
+        dy = (self.H_bkt - self.l10) * np.sin(np.pi - (theta_world + self.alpha7)) - self.L_bkt * np.sin(theta_world)
         
         return xa + dx, ya + dy, theta_world
     
-    def xy_fwd(self, x_wheel: float, pl: float) -> tuple[float, float]:
+    def xy_fwd(self, x_wheel: float, beta1: float) -> tuple[float, float]:
         """Calculates Cartesian position of the arm pivot joint."""
-        temp = np.arccos((self.l1**2 + self.l2**2 - pl**2)/(2*self.l1*self.l2)) + self.alpha1
-        x = x_wheel + self.l3 * np.cos(temp) + self.x_offset
-        y = self.l3 * np.sin(temp) + self.y_offset
+        x = x_wheel + self.l3 * np.cos(self.alpha1 + beta1)
+        y = self.l3 * np.sin(self.alpha1 + beta1)
         return x, y
         
-    def theta_fwd(self, pl: float, pt: float) -> tuple[float, float, float, float]:
+    def theta_fwd(self, beta2) -> float:
         """Calculates all linkage angles (beta, beta2, beta4, theta) from cylinder lengths."""
-        beta = self.alpha1 + np.arccos((self.l1**2 + self.l2**2 - pl**2) / (2*self.l1*self.l2))
-        beta2 = -self.alpha2 + beta + self.alpha3
-        beta3 = self.solve_4_bar(beta2, self.l4, pt, self.l5, self.l6)
-        beta4 = self.alpha5 + beta3 - self.alpha4
+        beta4 = self.alpha2 + beta2
         beta5 = self.solve_4_bar(beta4, self.l7, self.l8, self.l9, self.l10)
         theta = np.pi - (beta5 + self.alpha6 + self.alpha7)
-        return beta, beta2, beta4, theta
+        return theta
     
     # --- INVERSE KINEMATICS (VELOCITIES) ---
-    def beta_theta_dot_inv(self, y_dot: float, theta_world_dot: float, pl: float, pt: float) -> tuple[float, float, float, float]:
-        """Calculates joint angular velocities from tip vertical and world-rotation speeds."""
-        beta, _, _, theta = self.theta_fwd(pl, pt)
-        theta_world = theta + beta
-
-        temp1 = (self.l10 - self.H_bkt) * np.cos(theta_world + self.alpha7)
+    def beta_dot_inv(self, y_dot: float, theta_world_dot: float, beta1: float, theta_world: float) -> float:
+        temp1 = (self.l10 - self.H_bkt) * np.cos(np.pi - (theta_world + self.alpha7))
         temp2 = self.L_bkt * np.cos(theta_world)
-
-        beta_dot = (y_dot - ((-temp1 + temp2) * theta_world_dot)) / (self.l3 * np.cos(beta))
-        return beta_dot, theta_world_dot - beta_dot, beta, theta
-
-    def beta_dot_inv(self, beta_dot: float, pl: float) -> float:
-        """Translates arm angular velocity to lift cylinder linear velocity."""
-        cos_temp = (self.l1**2 + self.l2**2 - pl**2) / (2*self.l1*self.l2)
-        upper_term = self.l1 * self.l2 * np.sqrt(1-cos_temp**2)
-        pl_dot = (upper_term / pl) * beta_dot
-        return pl_dot
+        beta1_dot = (y_dot - (temp1 - temp2) * theta_world_dot) / (self.l3 * np.cos(self.alpha1 + beta1))
+        return beta1_dot
     
-    def x_dot_inv(self, x_dot: float, beta_dot: float, theta_world_dot: float, beta: float, theta: float) -> float:
-        """Calculates required wheel speed to satisfy target tip horizontal velocity."""
-        theta_world = theta + beta
-        temp1 = (self.l10 - self.H_bkt) * np.sin(theta_world + self.alpha7)
+    def x_dot_inv(self, x_dot, beta1_dot, theta_world_dot, beta1, theta_world):
+        temp1 = (self.l10 - self.H_bkt) * np.sin(np.pi - (theta_world + self.alpha7))
         temp2 = self.L_bkt * np.sin(theta_world)
-        v_wheel = x_dot + (self.l3 * np.sin(beta) * beta_dot) + ((-temp1 + temp2) * theta_world_dot)
+        v_wheel = x_dot + (self.l3 * np.sin(self.alpha1 + beta1) * beta1_dot) + ((temp1 + temp2) * theta_world_dot)
         return v_wheel
     
-    def theta_dot_inv(self, theta_dot: float, pl_dot: float, pl: float, pt: float) -> float:
+    def theta_dot_inv(self, theta_world_dot: float, beta1_dot:float, beta2: float) -> float:
         """Calculates tilt cylinder linear velocity from relative bucket angular velocity."""
-        temp1 = (self.l1**2 + self.l2**2 - pl**2) / (2*self.l1*self.l2)
-        beta_dot = (pl * pl_dot)/(self.l1 * self.l2 * np.sqrt(1-temp1**2))
-        beta, beta2, beta4, theta = self.theta_fwd(pl, pt)
+        beta5_dot = -(theta_world_dot + beta1_dot)
+        beta4 = self.alpha2 + beta2
 
-        # 1. Map theta_dot to bellcrank output velocity (beta4_dot)
-        temp2 = self.l7**2 + self.l9**2 - 2*self.l7*self.l9*np.cos(beta4)
-        temp3 = 2 * self.l7 * self.l9 * np.sin(beta4)
-        temp4 = (2 * self.l9**2) - (2 * self.l7 * self.l9 * np.cos(beta4))
+        temp1 = self.l7**2 + self.l9**2 - 2*self.l7*self.l9*np.cos(beta4)
+        temp2 = 2 * self.l7 * self.l9 * np.sin(beta4)
+        temp3 = (2 * self.l9**2) - (2 * self.l7 * self.l9 * np.cos(beta4))
         
-        first_upper_1 = -(((2 * self.l10 * np.sqrt(temp2)) * (temp3)) - ((temp2 - self.l8**2 + self.l10**2) * ((self.l10 * temp3)/(np.sqrt(temp2)))))
-        first_lower_1 = (np.sqrt(1-((temp2 - self.l8**2 + self.l10**2) / (2 * self.l10 * np.sqrt(temp2)))**2)) * ((2 * self.l10 * np.sqrt(temp2))**2)
-        second_upper_1 = ((2 * self.l9 * np.sqrt(temp2)) * (temp3)) - (temp4 * ((self.l9 * temp3) / (np.sqrt(temp2))))
-        second_lower_1 = (np.sqrt(1-((temp4)/(2 * self.l9 * np.sqrt(temp2)))**2)) * ((2 * self.l9 * np.sqrt(temp2))**2)
-        beta4_dot = (((first_upper_1/first_lower_1) + (second_upper_1/second_lower_1))**-1) * -theta_dot
+        first_upper_1 = (-((2 * self.l10 * np.sqrt(temp1)) * (temp2)) + ((temp1 - self.l8**2 + self.l10**2) * ((self.l10 * temp2)/(np.sqrt(temp1)))))
+        first_lower_1 = (np.sqrt(1-((temp1 - self.l8**2 + self.l10**2) / (2 * self.l10 * np.sqrt(temp1)))**2)) * ((2 * self.l10 * np.sqrt(temp1))**2)
+        second_upper_1 = ((2 * self.l9 * np.sqrt(temp1)) * (temp2)) - (temp3 * ((self.l9 * temp2) / (np.sqrt(temp1))))
+        second_lower_1 = (np.sqrt(1-((temp3)/(2 * self.l9 * np.sqrt(temp1)))**2)) * ((2 * self.l9 * np.sqrt(temp1))**2)
+        beta2_dot = (((first_upper_1/first_lower_1) + (second_upper_1/second_lower_1))**-1) * beta5_dot
 
-        # 2. Map bellcrank input velocity to tilt cylinder velocity (pt_dot)
-        temp5 = self.l4**2 + self.l5**2 - 2*self.l4*self.l5*np.cos(beta2)
-        temp6 = (2 * self.l5**2) - (2 * self.l4 * self.l5 * np.cos(beta2))
-        temp7 = (2 * self.l4 * self.l5 * np.sin(beta2) * beta_dot)
-        
-        first_upper_2 = (2*self.l5*np.sqrt(temp5))*(temp7) - (temp6)*((self.l5*temp7)/np.sqrt(temp5))
-        first_lower_2 = (np.sqrt(1-(temp6/(2*self.l5*np.sqrt(temp5)))**2)) * (2*self.l5*np.sqrt(temp5))**2
-        second_2 = (np.sqrt(1-((temp5 - pt**2 + self.l6**2)/(2*self.l6*np.sqrt(temp5)))**2)) * (2*self.l6*np.sqrt(temp5))**2
-        third_2 = (temp5 - pt**2 + self.l6**2) * (self.l6 * temp7) / (np.sqrt(temp5))
-        lower_2 = -(2*self.l6*np.sqrt(temp5))
-        pt_dot = (((((beta4_dot - (first_upper_2/first_lower_2))*second_2) + third_2)/lower_2) - temp7) / (-2*pt)
+        return beta2_dot
 
-        return pt_dot
     
     # --- MATH SOLVERS ---
     def triangle_angle_slove(self, l1: float, l2: float, theta: float) -> tuple[float, float, float]:
@@ -244,8 +175,8 @@ class KinematicsNode(Node):
             theta2: The angle opposite side l2.
         """
         l3 = np.sqrt(l1**2 + l2**2 - 2*l1*l2*np.cos(theta))
-        theta1 = np.arccos((l2**2 + l3**2 - l1**2) / (2*l2*l3))
-        theta2 = np.arccos((l1**2 + l3**2 - l2**2) / (2*l1*l3))
+        theta1 = np.arccos(np.clip((l2**2 + l3**2 - l1**2) / (2*l2*l3), -1, 1))
+        theta2 = np.arccos(np.clip((l1**2 + l3**2 - l2**2) / (2*l1*l3), -1, 1))
         return l3, theta1, theta2
     
     def solve_4_bar(self, theta1: float, l1: float, l2: float, l3: float, l4: float) -> float:
@@ -266,7 +197,7 @@ class KinematicsNode(Node):
         root_temp = np.sqrt(l1**2 + l3**2 - 2*l1*l3*np.cos(theta1))
         first_part = (root_temp**2 + l4**2 - l2**2) / (2*l4*root_temp)
         second_part = (2*(l3**2) - 2*l1*l3*np.cos(theta1)) / (2*l3*root_temp)
-        theta2 = np.arccos(first_part) - np.arccos(second_part)
+        theta2 = np.arccos(np.clip(first_part, -1, 1)) - np.arccos(np.clip(second_part, -1, 1))
         return theta2
     
 

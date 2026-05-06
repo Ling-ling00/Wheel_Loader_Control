@@ -25,6 +25,7 @@ class StateGeneratorNode(Node):
                 ('max_height', 4.0),        # Carry position height (m)
                 ('max_tilt_deg', 54.0),     # Max bucket tilt angle (degrees)
                 ('max_insert_length', 3.0), # Max insert length (m)
+                ('y_offset', 1.80),
             ]
         )
 
@@ -36,6 +37,7 @@ class StateGeneratorNode(Node):
         self.max_h = self.get_parameter('max_height').value
         self.max_tilt = np.deg2rad(self.get_parameter('max_tilt_deg').value)
         self.max_l = self.get_parameter('max_insert_length').value
+        self.y_offset = self.get_parameter('y_offset').value
 
         # --- ROS COMMUNICATION ---
         self.create_subscription(Pose, "/loader_pose", self.pose_callback, 10)
@@ -173,23 +175,23 @@ class StateGeneratorNode(Node):
         
         # Define bucket states: [Local_X, Local_Z, Pitch]
         # Point A: Approach pile base
-        p_a = [dist_to_pile - 0.2, 0.1, 0.0]
+        p_a = [dist_to_pile - 0.2, self.y_offset - 0.1, 0.0]
         
         # Point B: Horizontal penetration
-        p_b = [dist_to_pile + self.insert_l, 0.1, 0.0]
+        p_b = [dist_to_pile + self.insert_l, self.y_offset - 0.1, 0.0]
         
         # Point C: Lift and Tilt (Calculated via volume)
         volume_adj = self.volume * self.safety_factor
         x_c_calc = (volume_adj - (self.insert_l**2 * np.tan(self.slope)/2)) / (self.insert_l * np.tan(self.slope))
         x_c = min(x_c_calc, self.max_l, (self.max_h/np.tan(self.slope)))
         y_c = x_c * np.tan(self.slope)
-        p_c = [dist_to_pile + self.insert_l + x_c, y_c, self.slope]
+        p_c = [dist_to_pile + self.insert_l + x_c, self.y_offset - y_c, self.slope]
 
         if x_c < x_c_calc:
             self.get_logger().warn("Breakout Point C capped by max_x or max_h safety limits.")
 
         # Point D: Max Height / Carry position
-        p_d = [dist_to_pile + self.insert_l + x_c, self.max_h, self.max_tilt]
+        p_d = [dist_to_pile + self.insert_l + x_c, self.y_offset - self.max_h, self.max_tilt]
 
         return [self.bucket_pose, p_a, p_b, p_c, p_d]
     

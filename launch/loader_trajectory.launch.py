@@ -8,7 +8,7 @@ def generate_launch_description():
     config = os.path.join(
         get_package_share_directory(package_name),
         'config',
-        'params.yaml'
+        'params2.yaml'
     )
 
     return LaunchDescription([
