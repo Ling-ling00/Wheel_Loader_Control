@@ -143,12 +143,12 @@ Configuration is managed in `config/params.yaml`.
 These parameters define the fixed physical dimensions and joint locations of the wheel loader.
 |Parameter	|Type	|Default	|Description|
 | :--- | :--- | :--- | :--- |
-l1_coords, 	l4_coords|List	|(Various)	|[x, y] coordinates of the lift cylinder anchor and tilt cylinder anchor. |
-l2, l3, l5-l10	|Float	|(Various)	|Linkage segment lengths (m). Describe in picture.|
+l3, l5, l7, l8, l10	|Float	|(Various)	|Linkage segment lengths (m). Describe in picture.|
 L_bkt	|Float	|1.89815	|Horizontal length of the bucket.|
 H_bkt	|Float	|0.77523	|Vertical height of the bucket.|
 r	|Float	|1.0	|Radius of the loader wheels.|
-alpha3, 4, 7_deg | Float | (Various) | Angle offset between linkage (degree). Describe in picture.|
+alpha1, 2_deg | Float | (Various) | Start position angle of linkage when encoder is 0. Describe in picture. |
+alpha3, 7_deg | Float | (Various) | Angle offset between linkage (degree). Describe in picture.|
 
 image describe position of each linkage.
 ![alt text](img/image.png)
@@ -158,15 +158,13 @@ Hard constraints to prevent mechanical damage and ensure smooth trajectory gener
 
 |Parameter	|Type	|Default	|Description|
 | :--- | :--- | :--- | :--- |
-|limit_lift	|List	|[1.66, 2.65]	|[min, max] stroke length (m) for the lift cylinder.|
-|limit_tilt	|List	|[1.26, 1.84]	|[min, max] stroke length (m) for the tilt cylinder.|
 |vmax	|List	|[0.3, 0.3, 0.7]	|Max allowable velocity for [X, Y, Theta].|
 |amax	|List	|[0.1, 0.1, 0.3]	|Max allowable acceleration for [X, Y, Theta].|
-|y_offset	|Float	|1.7932	|Distance from the arm pivot (0,0 in kinematic frame) to the floor level.|
+|y_offset	|Float	|1.8	|Distance from the arm pivot (0,0 in kinematic frame) to the floor level.|
 |x_offset	|Float	|0.0	|Distance from the arm pivot (0,0 in kinematic frame) to center of wheel loader or base frame of wheel loader.|
-|replan_period	|Float	|0.5	|How often the trajectory generator refreshes the path.|
+|replan_period	|Float	|0.2	|How often the trajectory generator refreshes the path.|
 |arrival_tolerance	|Float	|0.1	|Distance error (m) allowed before considering a waypoint reached.|
-|dt	|Float	|0.02	|Global control loop period (default 50Hz).|
+|dt	|Float	|0.01	|Global control loop period (default 50Hz).|
 
 **Autonomous Dig Cycle (State Gen)**
 Logic-based parameters that determine the shape and aggressiveness of the digging path.
