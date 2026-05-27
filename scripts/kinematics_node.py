@@ -73,7 +73,7 @@ class KinematicsNode(Node):
     def feedback_callback(self, msg: Float64MultiArray) -> None:
         """Updates current cylinder lengths [pl (lift), pt (tilt)]."""
         if len(msg.data) >= 2:
-            self.beta1, self.beta2 = msg.data[0], msg.data[1]
+            self.beta1, self.beta2 = -msg.data[0], -msg.data[1]
 
     def local_pose_callback(self, msg: Pose) -> None:
         """Updates the current X position from the State Generator's global-to-local math."""

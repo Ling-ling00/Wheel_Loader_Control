@@ -8,15 +8,15 @@
     l7: 1.14011468
     l8: 0.97728480
     l10: 0.45989269
-    L_bkt: 1.622772
-    H_bkt: 0.598633
+    L_bkt: 1.29249
+    H_bkt: 0.69464
     r: 1.0
 
     # Angle Offsets (degrees)
     alpha1_deg: 29.701018799463878
     alpha2_deg: 50.58594847780444
     alpha3_deg: 16.79066
-    alpha7_deg: 109.9705
+    alpha7_deg: 103.04
     
     # --- System & Global Settings ---
     dt: 0.01
@@ -37,3 +37,6 @@
     max_insert_length: 2.5
     max_height: 4.0
     max_tilt_deg: 54.0
+
+    # --- Visualization ---
+    mode: "real" # "real" or "sim"

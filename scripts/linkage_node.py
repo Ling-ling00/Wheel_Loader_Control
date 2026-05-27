@@ -29,6 +29,7 @@ class LinkageNode(Node):
                 ('alpha3_deg', 16.1),
                 ('alpha7_deg', 93.61),
                 ('dt', 0.02),
+                ('mode', 'sim') # sim: no /loader_current_position input this node publishes, real: subscribes to /loader_current_position and visualizes
             ]
         )
 
@@ -52,6 +53,7 @@ class LinkageNode(Node):
         
         # Misc
         self.dt = self.get_parameter('dt').value
+        self.mode = self.get_parameter('mode').value
         
         # Static pivots/Logic
         self.P_arm_pivot = np.array([0.0, 0.0])
@@ -111,8 +113,8 @@ class LinkageNode(Node):
             self.theta_history.append(msg.data[2])
 
     def feedback_callback(self, msg: Float64MultiArray) -> None:
-        if len(msg.data) >= 2:
-            self.theta_arm_enc, self.theta_bc_enc = msg.data[0], msg.data[1]
+        if (len(msg.data) >= 2) and self.mode == 'real':
+            self.theta_arm_enc, self.theta_bc_enc = -msg.data[0], -msg.data[1]
 
     # --- UTILITIES ---
     def polar(self, r: float, theta: float) -> np.ndarray:
@@ -180,8 +182,9 @@ class LinkageNode(Node):
         self.last_time = now
 
         # Integrate and clamp cylinder lengths
-        self.theta_arm_enc += self.w_arm * actual_dt
-        self.theta_bc_enc  += self.w_bc * actual_dt
+        if self.mode == 'sim': # real one didn't need this since it subscribes to the actual encoder values
+            self.theta_arm_enc += self.w_arm * actual_dt
+            self.theta_bc_enc  += self.w_bc * actual_dt
 
         th_arm_abs = self.alpha1 + self.theta_arm_enc
         th_bc_abs = -(th_arm_abs - self.arm_angle_offset) - (np.pi-self.alpha4) - (self.alpha2 + self.theta_bc_enc)
@@ -206,7 +209,8 @@ class LinkageNode(Node):
         
         self.pub_angles.publish(msg_angles)
         self.pub_wheel.publish(msg_wheel)
-        self.pub_ang.publish(msg_ang)
+        if self.mode == 'sim':
+            self.pub_ang.publish(msg_ang)
 
     # --- VISUALIZATION ---
     def update_plot(self) -> None:

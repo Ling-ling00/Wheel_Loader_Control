@@ -136,7 +136,7 @@ This node transform feedback topic from gazebo message ModelStates to geometry m
 ---
 
 ## Parameters
-Configuration is managed in `config/params.yaml`.
+Configuration is managed in `config/params2.yaml`.
 
 **Mechanical & Linkage Geometry**
 
@@ -178,6 +178,11 @@ Logic-based parameters that determine the shape and aggressiveness of the diggin
 |max_insert_length	|Float	|3.0	|Maximum horizontal safety limit for digging.|
 |max_height	|Float	|4.0	|Target Z-height for the final "Carry" state.|
 |max_tilt_deg	|Float	|54.0	|Target rollback angle for bucket transport.|
+
+**Mode For visualize**
+|Parameter	|Type	|Default	|Description|
+| :--- | :--- | :--- | :--- |
+|mode   |String    |'real'  |Mode of input for linkage node 'real' linkage node sub /loader_current_position and not publish this topic, 'sim' no /loader_current_position input likage node will calculate current position from input velocity and publish.|
 
 ---
 
