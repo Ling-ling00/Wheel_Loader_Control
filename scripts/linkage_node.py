@@ -183,8 +183,8 @@ class LinkageNode(Node):
 
         # Integrate and clamp cylinder lengths
         if self.mode == 'sim': # real one didn't need this since it subscribes to the actual encoder values
-            self.theta_arm_enc += self.w_arm * actual_dt
-            self.theta_bc_enc  += self.w_bc * actual_dt
+            self.theta_arm_enc -= self.w_arm * actual_dt
+            self.theta_bc_enc  -= self.w_bc * actual_dt
 
         th_arm_abs = self.alpha1 + self.theta_arm_enc
         th_bc_abs = -(th_arm_abs - self.arm_angle_offset) - (np.pi-self.alpha4) - (self.alpha2 + self.theta_bc_enc)
@@ -205,7 +205,7 @@ class LinkageNode(Node):
         
         msg_angles.data = [float(th_arm_abs), float(-(th_bkt + th_arm_abs))]
         msg_wheel.data = [float(self.w_wheel), float(self.w_wheel)]
-        msg_ang.data = [self.theta_arm_enc, self.theta_bc_enc]
+        msg_ang.data = [-self.theta_arm_enc, -self.theta_bc_enc]
         
         self.pub_angles.publish(msg_angles)
         self.pub_wheel.publish(msg_wheel)
@@ -223,7 +223,7 @@ class LinkageNode(Node):
         self.ax_sim.set_ylim(-3, 5)
         self.ax_sim.set_aspect('equal')
         self.ax_sim.grid(True)
-        self.ax_sim.set_title(f"Mechanism Animation | en1: {self.theta_arm_enc:.2f}m | en2: {self.theta_bc_enc:.2f}m")
+        self.ax_sim.set_title(f"Mechanism Animation | en1: {-self.theta_arm_enc:.2f}m | en2: {-self.theta_bc_enc:.2f}m")
 
         c = self.current_coords
         self.plot_line(self.ax_sim, c['bellcrank'][0], c['bellcrank'][1], 'm-', 3)

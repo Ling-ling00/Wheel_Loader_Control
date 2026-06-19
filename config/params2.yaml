@@ -39,4 +39,4 @@
     max_tilt_deg: 54.0
 
     # --- Visualization ---
-    mode: "real" # "real" or "sim"
+    mode: "sim" # "real" or "sim"

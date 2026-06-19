@@ -73,7 +73,7 @@ class KinematicsNode(Node):
     def feedback_callback(self, msg: Float64MultiArray) -> None:
         """Updates current cylinder lengths [pl (lift), pt (tilt)]."""
         if len(msg.data) >= 2:
-            self.beta1, self.beta2 = -msg.data[0], -msg.data[1]
+            self.beta1, self.beta2 = msg.data[0], msg.data[1]
 
     def local_pose_callback(self, msg: Pose) -> None:
         """Updates the current X position from the State Generator's global-to-local math."""
@@ -107,7 +107,7 @@ class KinematicsNode(Node):
     def tip_fwd(self, x_wheel: float, beta1: float, beta2: float) -> tuple[float, float, float]:
         """Calculates global [x, y, theta] of the bucket tip."""
         theta = self.theta_fwd(beta2)
-        theta_world = theta - (self.alpha1 + beta1)
+        theta_world = theta - (self.alpha1 - beta1)
         xa, ya = self.xy_fwd(x_wheel, beta1)
 
         dx = (self.H_bkt - self.l10) * np.cos(np.pi - (theta_world + self.alpha7)) + self.L_bkt * np.cos(theta_world)
@@ -117,13 +117,13 @@ class KinematicsNode(Node):
     
     def xy_fwd(self, x_wheel: float, beta1: float) -> tuple[float, float]:
         """Calculates Cartesian position of the arm pivot joint."""
-        x = x_wheel + self.l3 * np.cos(self.alpha1 + beta1)
-        y = self.l3 * np.sin(self.alpha1 + beta1)
+        x = x_wheel + self.l3 * np.cos(self.alpha1 - beta1)
+        y = self.l3 * np.sin(self.alpha1 - beta1)
         return x, y
         
     def theta_fwd(self, beta2) -> float:
         """Calculates all linkage angles (beta, beta2, beta4, theta) from cylinder lengths."""
-        beta4 = self.alpha2 + beta2
+        beta4 = self.alpha2 - beta2
         beta5 = self.solve_4_bar(beta4, self.l7, self.l8, self.l9, self.l10)
         theta = np.pi - (beta5 + self.alpha6 + self.alpha7)
         return theta
@@ -132,19 +132,19 @@ class KinematicsNode(Node):
     def beta_dot_inv(self, y_dot: float, theta_world_dot: float, beta1: float, theta_world: float) -> float:
         temp1 = (self.l10 - self.H_bkt) * np.cos(np.pi - (theta_world + self.alpha7))
         temp2 = self.L_bkt * np.cos(theta_world)
-        beta1_dot = (y_dot - (temp1 - temp2) * theta_world_dot) / (self.l3 * np.cos(self.alpha1 + beta1))
+        beta1_dot = (y_dot - (temp1 - temp2) * theta_world_dot) / -(self.l3 * np.cos(self.alpha1 - beta1))
         return beta1_dot
     
     def x_dot_inv(self, x_dot, beta1_dot, theta_world_dot, beta1, theta_world):
         temp1 = (self.l10 - self.H_bkt) * np.sin(np.pi - (theta_world + self.alpha7))
         temp2 = self.L_bkt * np.sin(theta_world)
-        v_wheel = x_dot + (self.l3 * np.sin(self.alpha1 + beta1) * beta1_dot) + ((temp1 + temp2) * theta_world_dot)
+        v_wheel = x_dot - (self.l3 * np.sin(self.alpha1 - beta1) * beta1_dot) + ((temp1 + temp2) * theta_world_dot)
         return v_wheel
     
     def theta_dot_inv(self, theta_world_dot: float, beta1_dot:float, beta2: float) -> float:
         """Calculates tilt cylinder linear velocity from relative bucket angular velocity."""
-        beta5_dot = -(theta_world_dot + beta1_dot)
-        beta4 = self.alpha2 + beta2
+        beta5_dot = -(theta_world_dot - beta1_dot)
+        beta4 = self.alpha2 - beta2
 
         temp1 = self.l7**2 + self.l9**2 - 2*self.l7*self.l9*np.cos(beta4)
         temp2 = 2 * self.l7 * self.l9 * np.sin(beta4)
@@ -154,7 +154,8 @@ class KinematicsNode(Node):
         first_lower_1 = (np.sqrt(1-((temp1 - self.l8**2 + self.l10**2) / (2 * self.l10 * np.sqrt(temp1)))**2)) * ((2 * self.l10 * np.sqrt(temp1))**2)
         second_upper_1 = ((2 * self.l9 * np.sqrt(temp1)) * (temp2)) - (temp3 * ((self.l9 * temp2) / (np.sqrt(temp1))))
         second_lower_1 = (np.sqrt(1-((temp3)/(2 * self.l9 * np.sqrt(temp1)))**2)) * ((2 * self.l9 * np.sqrt(temp1))**2)
-        beta2_dot = (((first_upper_1/first_lower_1) + (second_upper_1/second_lower_1))**-1) * beta5_dot
+        beta4_dot = (((first_upper_1/first_lower_1) + (second_upper_1/second_lower_1))**-1) * beta5_dot
+        beta2_dot = -beta4_dot
 
         return beta2_dot
 
