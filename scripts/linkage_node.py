@@ -29,6 +29,8 @@ class LinkageNode(Node):
                 ('alpha3_deg', 16.1),
                 ('alpha7_deg', 93.61),
                 ('dt', 0.02),
+                ('limit_beta1_deg', [0.0, 100.0]),
+                ('limit_beta2_deg', [0.0, 100.0]),
                 ('mode', 'sim') # sim: no /loader_current_position input this node publishes, real: subscribes to /loader_current_position and visualizes
             ]
         )
@@ -53,6 +55,8 @@ class LinkageNode(Node):
         
         # Misc
         self.dt = self.get_parameter('dt').value
+        self.limit_beta1_rad = np.deg2rad(self.get_parameter('limit_beta1_deg').value)
+        self.limit_beta2_rad = np.deg2rad(self.get_parameter('limit_beta2_deg').value)
         self.mode = self.get_parameter('mode').value
         
         # Static pivots/Logic
@@ -186,6 +190,9 @@ class LinkageNode(Node):
             self.theta_arm_enc -= self.w_arm * actual_dt
             self.theta_bc_enc  -= self.w_bc * actual_dt
 
+            self.theta_arm_enc = np.clip(self.theta_arm_enc, -self.limit_beta1_rad[1], -self.limit_beta1_rad[0])
+            self.theta_bc_enc = np.clip(self.theta_bc_enc, -self.limit_beta1_rad[1], -self.limit_beta1_rad[0])
+
         th_arm_abs = self.alpha1 + self.theta_arm_enc
         th_bc_abs = -(th_arm_abs - self.arm_angle_offset) - (np.pi-self.alpha4) - (self.alpha2 + self.theta_bc_enc)
 
@@ -223,7 +230,7 @@ class LinkageNode(Node):
         self.ax_sim.set_ylim(-3, 5)
         self.ax_sim.set_aspect('equal')
         self.ax_sim.grid(True)
-        self.ax_sim.set_title(f"Mechanism Animation | en1: {-self.theta_arm_enc:.2f}m | en2: {-self.theta_bc_enc:.2f}m")
+        self.ax_sim.set_title(f"Mechanism Animation | en1: {-self.theta_arm_enc:.2f}rad | en2: {-self.theta_bc_enc:.2f}rad")
 
         c = self.current_coords
         self.plot_line(self.ax_sim, c['bellcrank'][0], c['bellcrank'][1], 'm-', 3)

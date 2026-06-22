@@ -5,6 +5,7 @@ from rclpy.node import Node
 import numpy as np
 from collections import deque
 from std_msgs.msg import Float64MultiArray
+from std_srvs.srv import Trigger
 
 class TrajectoryGeneratorNode(Node):
     def __init__(self):
@@ -41,6 +42,7 @@ class TrajectoryGeneratorNode(Node):
         self.create_subscription(Float64MultiArray, "/loader_target_position", self.target_position_callback, 10)
         self.create_subscription(Float64MultiArray, "/loader_current_end_position", self.feedback_callback, 10)
         self.publish_velocity = self.create_publisher(Float64MultiArray, "/loader_target_velocity", 10)
+        self.create_service(Trigger, "/stop_trajectory", self.stop_trajectory_service)
 
         self.create_timer(self.dt, self.control_loop)
         self.create_timer(self.replan_period, self.replan_loop)
@@ -138,6 +140,13 @@ class TrajectoryGeneratorNode(Node):
             traj_vel.append(vel)
 
         return traj_vel
+
+    def stop_trajectory_service(self, request, response) -> Trigger.Response:
+        """ROS Service callback to stop the trajectory execution."""
+        self.stop_robot("Trajectory stopped by service call.")
+        response.success = True
+        response.message = "Trajectory execution stopped."
+        return response
     
     def stop_robot(self, reason: str) -> None:
         """Helper to cleanly stop motion and reset states."""

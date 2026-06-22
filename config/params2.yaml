@@ -17,6 +17,10 @@
     alpha2_deg: 50.58594847780444
     alpha3_deg: 16.79066
     alpha7_deg: 99.49
+
+    # Rotation Joint Limits [min, max] (degrees)
+    limit_beta1_deg: [-0.5, 100.0]
+    limit_beta2_deg: [-0.5, 100.0]
     
     # --- System & Global Settings ---
     dt: 0.01
