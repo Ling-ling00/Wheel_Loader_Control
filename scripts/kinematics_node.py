@@ -71,7 +71,7 @@ class KinematicsNode(Node):
             self.v_x, self.v_y, self.v_theta_world = msg.data[0], msg.data[1], msg.data[2]
 
     def feedback_callback(self, msg: Float64MultiArray) -> None:
-        """Updates current cylinder lengths [pl (lift), pt (tilt)]."""
+        """Updates current joint angles [beta1 (lift), beta2 (tilt)]."""
         if len(msg.data) >= 2:
             self.beta1, self.beta2 = msg.data[0], msg.data[1]
 
@@ -122,7 +122,7 @@ class KinematicsNode(Node):
         return x, y
         
     def theta_fwd(self, beta2) -> float:
-        """Calculates all linkage angles (beta, beta2, beta4, theta) from cylinder lengths."""
+        """Calculates all linkage angles (beta, beta2, beta4, theta) from joint angles."""
         beta4 = self.alpha2 - beta2
         beta5 = self.solve_4_bar(beta4, self.l7, self.l8, self.l9, self.l10)
         theta = np.pi - (beta5 + self.alpha6 + self.alpha7)
@@ -142,7 +142,7 @@ class KinematicsNode(Node):
         return v_wheel
     
     def theta_dot_inv(self, theta_world_dot: float, beta1_dot:float, beta2: float) -> float:
-        """Calculates tilt cylinder linear velocity from relative bucket angular velocity."""
+        """Calculates tilt joint angular velocity from relative bucket angular velocity."""
         beta5_dot = -(theta_world_dot - beta1_dot)
         beta4 = self.alpha2 - beta2
 
@@ -183,7 +183,7 @@ class KinematicsNode(Node):
     def solve_4_bar(self, theta1: float, l1: float, l2: float, l3: float, l4: float) -> float:
         """
         Solves a 4-bar linkage configuration to find the output joint angle.
-        Commonly used to map tilt cylinder displacement to bucket rotation.
+        Commonly used to map tilt joint angle to bucket rotation.
 
         Args:
             theta1: Input angle (angle between l1 and l3).

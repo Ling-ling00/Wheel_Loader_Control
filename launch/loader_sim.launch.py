@@ -13,7 +13,7 @@ def generate_launch_description():
     pkg_path = get_package_share_directory(pkg_name)
 
     # File paths
-    xacro_file = os.path.join(pkg_path, 'urdf', 'L580_end_link.xacro')
+    xacro_file = os.path.join(pkg_path, 'urdf', 'L580_end_link_v2.xacro')
     rviz_file = os.path.join(pkg_path, 'rviz', 'rviz.rviz')
     world_file = os.path.join(pkg_path, 'world', 'pile_world.world')
 

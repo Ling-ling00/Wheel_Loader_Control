@@ -10,7 +10,7 @@
     l10: 0.45989269
     L_bkt: 1.60739
     H_bkt: 1.01077
-    r: 1.0
+    r: 1.69375
 
     # Angle Offsets (degrees)
     alpha1_deg: 29.701018799463878
@@ -24,7 +24,7 @@
     
     # --- System & Global Settings ---
     dt: 0.01
-    y_offset: 1.8
+    y_offset: 2.1
     x_offset: 0.0
 
     # --- Trajectory Generator Settings ---

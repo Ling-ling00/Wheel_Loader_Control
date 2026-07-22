@@ -26,6 +26,7 @@ class StateGeneratorNode(Node):
                 ('max_tilt_deg', 54.0),     # Max bucket tilt angle (degrees)
                 ('max_insert_length', 3.0), # Max insert length (m)
                 ('y_offset', 1.80),
+                ('out_date_data_timeout', 0.5)
             ]
         )
 
@@ -38,6 +39,7 @@ class StateGeneratorNode(Node):
         self.max_tilt = np.deg2rad(self.get_parameter('max_tilt_deg').value)
         self.max_l = self.get_parameter('max_insert_length').value
         self.y_offset = self.get_parameter('y_offset').value
+        self.out_date_data_timeout = self.get_parameter('out_date_data_timeout').value
 
         # --- ROS COMMUNICATION ---
         self.create_subscription(Pose, "/loader_pose", self.pose_callback, 10)
@@ -55,6 +57,7 @@ class StateGeneratorNode(Node):
         self.local_yaw = 0.0
         self.start_x = 0.0
         self.start_y = 0.0
+        self.last_update_time = self.get_clock().now()
 
     # --- ROS CALLBACKS ---
     def pose_callback(self, msg: Pose) -> None:
@@ -132,6 +135,7 @@ class StateGeneratorNode(Node):
         
         x_wheel = dx * np.cos(self.local_yaw) + dy * np.sin(self.local_yaw)
         self.target_pile_local = relevant_x[closest_idx]
+        self.last_update_time = self.get_clock().now()
 
         # Slope estimation: atan2(Height Change / Distance Change)
         self.slope = np.deg2rad(np.average(relevant_angle))
@@ -141,7 +145,8 @@ class StateGeneratorNode(Node):
     # --- ACTION LOGIC ---
     def start_trigger_callback(self, req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
         """Service handler to begin the waypoint generation and publishing."""
-        if self.target_pile_local is not None:
+        dt = (self.get_clock().now() - self.last_update_time).nanoseconds * 1e-9
+        if (dt < self.out_date_data_timeout) and (self.target_pile_local is not None):
             waypoints = self.state_generate()
             msg = Float64MultiArray()
             msg.data = list(np.array(waypoints).flatten())
@@ -166,6 +171,7 @@ class StateGeneratorNode(Node):
         B: Insertion (Driving horizontal into pile)
         C: Breakout (Lifting and tilting to fill bucket based on target volume)
         D: Carry (Moving to max height for transport)
+        E: Move back to start position
         """
         if self.slope < 0.01:
             return
@@ -193,7 +199,10 @@ class StateGeneratorNode(Node):
         # Point D: Max Height / Carry position
         p_d = [dist_to_pile + self.insert_l + x_c, self.y_offset - self.max_h, self.max_tilt]
 
-        return [self.bucket_pose, p_a, p_b, p_c, p_d]
+        # Point E: Move back to start position
+        p_e = [self.bucket_pose[0], self.y_offset - self.max_h, self.max_tilt]
+
+        return [self.bucket_pose, p_a, p_b, p_c, p_d, p_e]
     
 
 def main(args=None):

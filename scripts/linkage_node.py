@@ -185,7 +185,7 @@ class LinkageNode(Node):
         actual_dt = (now - self.last_time).nanoseconds / 1e9
         self.last_time = now
 
-        # Integrate and clamp cylinder lengths
+        # Integrate and clamp joint angle encoders
         if self.mode == 'sim': # real one didn't need this since it subscribes to the actual encoder values
             self.theta_arm_enc -= self.w_arm * actual_dt
             self.theta_bc_enc  -= self.w_bc * actual_dt
