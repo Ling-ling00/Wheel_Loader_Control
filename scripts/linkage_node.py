@@ -191,7 +191,7 @@ class LinkageNode(Node):
             self.theta_bc_enc  -= self.w_bc * actual_dt
 
             self.theta_arm_enc = np.clip(self.theta_arm_enc, -self.limit_beta1_rad[1], -self.limit_beta1_rad[0])
-            self.theta_bc_enc = np.clip(self.theta_bc_enc, -self.limit_beta1_rad[1], -self.limit_beta1_rad[0])
+            self.theta_bc_enc = np.clip(self.theta_bc_enc, -self.limit_beta2_rad[1], -self.limit_beta2_rad[0])
 
         th_arm_abs = self.alpha1 + self.theta_arm_enc
         th_bc_abs = -(th_arm_abs - self.arm_angle_offset) - (np.pi-self.alpha4) - (self.alpha2 + self.theta_bc_enc)
